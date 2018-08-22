@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+#status {
+    visibility: hidden;
+}
+
+td:first-child + td + td {
+	border-right: 1px solid #ccc;
+}
+td:first-child + td {
+	border-right: 1px solid #ccc;
+}
+</style>
+	<title>Contractor monthly checklist webform</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="/upperair/font-awesome470/css/font-awesome.min.css">
+	<link rel="stylesheet" href="/upperair/w3.css">
+	<script src="/upperair/jquery-3.3.1.min.js"></script>
+	<script type = "text/javascript" language = "javascript">
+	
+	//Get the current week and place in the cw variable.
+	$.get( "weekofyear.php", function( cw ) {
+
+		//Runs startup once the DOM is ready then waits for a button click to submit the form data.
+		$(document).ready(function(){							//jQuery. Waits for DOM before doing anything.
+			startup();
+			
+			$("button").click(function(){						//jQuery click function
+				event.preventDefault();							//Suppress the default form submit action 
+				document.getElementById("returnedMsg").innerHTML = "";
+				console.log("button");
+				var formData = $("form").serializeArray();		//convert form to array of name:value objects.
+
+				$.ajax({
+					type: "POST",
+					url: "saveForm.php",
+					data: formData,
+					success: function(returnedData){					//json is recieved from PHP page on success.
+						document.getElementById("conForm").reset();		//clears the form after a successful submit
+						startup();										//Repopulates the form from the DB with the updated data
+						document.getElementById("returnedMsg").innerHTML = returnedData["message"];		//displays success message
+					},
+					error: function (jqXHR, exception) {				//Some error data if there is a problem. Debugging only
+						var msg = '';
+						if (jqXHR.status === 0) {
+							msg = 'Not connect.\n Verify Network.';
+						} else if (jqXHR.status == 404) {
+							msg = 'Requested page not found. [404]';
+						} else if (jqXHR.status == 500) {
+							msg = 'Internal Server Error [500].';
+						} else if (exception === 'parsererror') {
+							msg = 'Requested JSON parse failed.';
+						} else if (exception === 'timeout') {
+							msg = 'Time out error.';
+						} else if (exception === 'abort') {
+							msg = 'Ajax request aborted.';
+						} else {
+							msg = 'Uncaught Error.\n' + jqXHR.responseText;
+						}
+						alert(msg);
+					},
+				  dataType: "json"
+				});			
+			});
+
+		
+		//Load past data and display the current week.
+		function startup() {
+			//console.log("startup");
+			loadData();
+			var name = "Current week: " + cw;
+			document.getElementById("currentweek").innerHTML = name;
+		}
+		
+		
+		//Check what weeks have been submitted relative to the current week.
+		function checkSubmitted(lastWeek) {
+			
+			
+			if (lastWeek == cw) {
+
+				var status = document.getElementById ("status");
+				status.style.visibility = "visible";
+				document.getElementById("submittedMsg").innerHTML = "Current week already submitted. Values shown in week " + cw + " column";
+				document.getElementById("entryCol").innerHTML = "Next<br>week";
+				document.getElementById("submitBtn").disabled = true;
+			}
+			
+			if (cw - lastWeek == 1) {
+				document.getElementById("entryweek").value  = cw;
+				document.getElementById("entryCol").innerHTML = "Current<br>week";	
+				document.getElementById("submittedMsg").innerHTML = "Fill in entries in Current week column";
+			}
+			
+			if (cw - lastWeek > 1) {
+				console.log("checkSubmitted cw - lastweek:" + (cw - lastWeek));
+				document.getElementById("submittedMsg").innerHTML = "Last week missing. Data you enter will go into last weeks data.<br>Just leave everything blank and submit if you want to skip to last week.";
+				document.getElementById("entryCol").innerHTML = "Last<br>week";
+				document.getElementById("entryweek").value  = cw - 1;
+			}
+		}
+		
+		//Load previously entered data from the database into the form.
+		function loadData() {
+			console.log("loadData");
+			$.ajax({
+			  type: "POST",
+			  dataType: "json",
+			  url: 'loadForm.php',
+			  success: function(jsonData)	{
+					var data;
+					var el;
+					var i;
+					var key;
+					var weekNum;
+					var contractors = "";
+					var condate = "";
+					var issues = "";
+					var issuedate = "";
+
+					checkSubmitted(jsonData["week2"]["week2"]);
+					
+					document.getElementById("col2").innerHTML = jsonData["week2"]["week2"];
+					document.getElementById("col3").innerHTML = jsonData["week3"]["week3"];
+					document.getElementById("col4").innerHTML = jsonData["week4"]["week4"];
+					document.getElementById("col5").innerHTML = jsonData["week5"]["week5"];
+
+					for (weekNum in jsonData) {
+						for (key in jsonData[weekNum]) {
+							if (!(key == "id" || key == "week" || key == "reg_date")) {		//skip these variables
+								data = jsonData[weekNum][key];								//check the checkboxes
+								if (data == "yes") {
+									el = document.getElementsByName(key)[0];
+									el.checked = true;
+								} 
+							}
+							if (key.slice(-2) == "_4" || key.slice(-2) == "_5") {			//populate gas pressure fields 
+								document.getElementById(key).value  = data;
+							}
+							if (key == "contractors" && data != "") {						//append contractor field text for display
+								contractors = data + "<br>" + contractors ;
+								document.getElementById("pastcontractor").innerHTML = contractors;
+								condate = jsonData[weekNum]["reg_date"] + "<br>" + condate;
+								document.getElementById("contractordate").innerHTML = condate;
+							}
+							if (key == "issues" && data != "") {							//append issues text for display
+								issues = data + "<br>" + issues ;
+								document.getElementById("pastissues").innerHTML = issues;
+								issuedate = jsonData[weekNum]["reg_date"] + "<br>" + issuedate;
+								document.getElementById("issuedate").innerHTML = issuedate;
+							}
+
+						}
+					}
+
+				}//suc
+			});//jq
+		}//load func	
+		});
+	});
+	</script>
+</head>
+<body>
+
+<div class="w3-container"> 
+	<h1 class="w3-container w3-center w3-light-grey">Contractor weekly checklist webform</h1>
+	<div class="w3-card-4 w3-dark-grey w3-padding" style="width:95%">
+		<h3>Instructions:</h3>
+		<p>Fill in the Current week column and click the submit button below.<br>
+		Clicking the submit button saves all the current week column values and disables the form until the next week.</p>
+		<p>- Only the current week column values are saved. The other columns are for reference only.</p>
+		<p>- You can only submit the form once for each week so do it at the end of the week.</p>
+		<p>- Values entered are discarded if the submit button is not clicked. Don't fill out the form until you are ready to submit it. 
+		<p>- If the week has past (after Sunday) and a form has not been submitted any values submitted will be saved as the previous week.<br>
+		Once the previous week has been submitted you can then enter values for the current week and submit or wait until the end of the week/next week.</p>
+		<p>- Only values for the previous week and the current week can be submitted. A blank entry will be submitted for weeks before this if they are missed.</p>
+		<br>
+	</div>
+	<br>
+	<div class="w3-card-4 w3-dark-grey" style="width:95%">
+		<form id="conForm" action="">
+		<div class="w3-cell-row w3-padding">
+			<div class="w3-container w3-cell">
+				<div class="w3-container w3-text-orange">
+					<h3 id="currentweek">?</h3>
+					<p id="submittedMsg">Fill in entries in Current week column</p>
+				</div>
+			</div>
+			<div id="status" class="w3-container w3-cell w3-red w3-cell-middle" style="text-align: center">
+				<h2>Form Disabled</h2>
+			</div>
+		</div>
+		<div class="w3-cell-row" style="width:70%">
+			<div class="w3-container w3-light-grey w3-cell">
+				<h3>Automatic Balloon Launch System</h3>
+			</div>
+			<div class="w3-container w3-cell w3-cell-middle">
+				<i>see Autosonde Maintenance Chapter 30.4 for instructions</i><br>
+			</div>
+		</div>
+		
+		<input type="hidden" id="entryweek" value=0 name="week" />
+		
+		<table class="w3-table">
+		<tr>
+		  <th width="30%">Task</th>
+		  <th width="12%">Frequency</th>
+		  <th class="w3-container w3-text-orange" id="entryCol" style="border-top: 1px solid #ccc; border-left: 1px solid #ccc; border-right: 1px solid #ccc">Current<br>week</th>
+		  <th id="col2">Last</th>
+		  <th id="col3"></th>
+		  <th id="col4"></th>
+		  <th id="col5"></th>
+		  <th>Reference</th>
+		</tr>
+		<tr>
+		  <td>Load Autosonde<sub> (record number of sondes loaded)</sub></td>
+		  <td>fortnightly</td>
+		  <td><input type="checkbox" name="week1_1" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_1" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_1" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_1" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_1" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Clean balloon sensor</td>
+		  <td>fortnightly</td>
+		  <td><input type="checkbox" name="week1_2" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_2" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_2" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_2" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_2" value="yes" disabled="true">Week 5</td>
+		  <td>30.4.45</td>
+		</tr>
+		<tr>
+		  <td>Hydrogen leak test</td>
+		  <td>fortnightly<br>and at gas<br>change over</td>
+		  <td><input type="checkbox" name="week1_3" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_3" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_3" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_3" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_3" value="yes" disabled="true">Week 5</td>
+		  <td>30.4.52</td>
+		</tr>
+		<tr>
+		  <td>Read gas levels<sub> (record values)</sub></td>
+		  <td>fortnightly P1</td>
+		  <td><input type = "number" name="week1_4" id="week1_4" step="0.1" style="width: 5em"></td>
+		  <td><input type = "number" name="week2_4" id="week2_4" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td><input type = "number" name="week3_4" id="week3_4" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td><input type = "number" name="week4_4" id="week4_4" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td><input type = "number" name="week5_4" id="week5_4" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td>30.4.41</td>
+		</tr>
+		<tr>
+		  <td></td>
+		  <td>fortnightly P2</td>
+		  <td><input type = "number" name="week1_5" id="week1_5" step="0.1" style="width: 5em"></td>
+		  <td><input type = "number" name="week2_5" id="week2_5" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td><input type = "number" name="week3_5" id="week3_5" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td><input type = "number" name="week4_5" id="week4_5" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td><input type = "number" name="week5_5" id="week5_5" step="0.1" style="width: 5em" disabled="true"></td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Inspect gas regulators</td>
+		  <td>fortnightly</td>
+		  <td><input type="checkbox" name="week1_6" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_6" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_6" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_6" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_6" value="yes" disabled="true">Week 5</td>
+		  <td>30.4.38</td>
+		</tr>
+		<tr>
+		  <td>Test shower</td>
+		  <td>Monthly</td>
+		  <td><input type="checkbox" name="week1_7" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_7" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_7" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_7" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_7" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Notify BOM of gas requirements</td>
+		  <td>As required</td>
+		  <td><input type="checkbox" name="week1_8" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_8" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_8" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_8" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_8" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Receive gas deliveries<sub> (Tuesdays and Thursdays only)</sub></td>
+		  <td>As required</td>
+		  <td><input type="checkbox" name="week1_9" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_9" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_9" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_9" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_9" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Report on use of consumables</td>
+		  <td>Monthly</td>
+		  <td><input type="checkbox" name="week1_10" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_10" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_10" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_10" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_10" value="yes" disabled="true">Week 5</td>
+		  <td>F146 form</td>
+		</tr>
+		<tr>
+		  <td>Check serviceability of air conditioner</td>
+		  <td>fortnightly</td>
+		  <td><input type="checkbox" name="week1_11" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_11" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_11" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_11" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_11" value="yes" disabled="true">Week 5</td>
+		  <td>30.4.50</td>
+		</tr>
+		<tr>
+		  <td>Empty rubbish</td>
+		  <td>fortnightly</td>
+		  <td style="border-bottom: 1px solid #ccc"><input type="checkbox" name="week1_12" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_12" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_12" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_12" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_12" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		</table>
+		<br>
+		<div class="w3-cell-row" style="width:30%">
+			<div class="w3-container w3-light-grey w3-cell">
+				<h3>Observation Equipment</h3>
+			</div>
+		</div>
+		<table class="w3-table">
+		<tr>
+		  <th width="30%">Task</th>
+		  <th width="12%">Frequency</th>
+		  <th></th>
+		  <th></th>
+		  <th></th>
+		  <th></th>
+		  <th></th>
+		  <th>Reference</th>
+		</tr>
+		<tr>
+		  <td>Clean screen</td>
+		  <td>monthly</td>
+		  <td style="border-top: 1px solid #ccc"><input type="checkbox" name="week1_13" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_13" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_13" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_13" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_13" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Clean Ceilometer</td>
+		  <td>monthly</td>
+		  <td><input type="checkbox" name="week1_14" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_14" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_14" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_14" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_14" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Clean Vismeter</td>
+		  <td>monthly</td>
+		  <td><input type="checkbox" name="week1_15" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_15" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_15" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_15" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_15" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Clean evaporation pan</td>
+		  <td>monthly</td>
+		  <td><input type="checkbox" name="week1_16" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_16" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_16" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_16" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_16" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Check Rain gauge for blockage</td>
+		  <td>monthly</td>
+		  <td><input type="checkbox" name="week1_17" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_17" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_17" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_17" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_17" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Change data logger</td>
+		  <td>when received</td>
+		  <td style="border-bottom: 1px solid #ccc"><input type="checkbox" name="week1_18" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_18" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_18" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_18" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_18" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>		
+		</table>
+		<br>
+		<div class="w3-cell-row" style="width:30%">
+			<div class="w3-container w3-light-grey w3-cell">
+				<h3>Other</h3>
+			</div>
+		</div>
+		<table class="w3-table">
+		<tr>
+		  <th width="30%">Task</th>
+		  <th width="12%">Frequency</th>
+		  <th></th>
+		  <th></th>
+		  <th></th>
+		  <th></th>
+		  <th></th>
+		  <th>Reference</th>
+		</tr>
+		<tr>
+		  <td>Check operation of office<br>air conditioners</td>
+		  <td>each visit</td>
+		  <td style="border-top: 1px solid #ccc"><input type="checkbox" name="week1_19" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_19" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_19" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_19" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_19" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Check radar building air conditioner</td>
+		  <td>each visit</td>
+		  <td><input type="checkbox" name="week1_20" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_20" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_20" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_20" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_20" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Put bins out for roadside collections<br>on Tuesdays and bring back in</td>
+		  <td>as required</td>
+		  <td><input type="checkbox" name="week1_21" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_21" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_21" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_21" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_21" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Receive courier deliveries</td>
+		  <td>as required</td>
+		  <td><input type="checkbox" name="week1_22" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_22" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_22" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_22" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_22" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Perform generator test</td>
+		  <td>monthly</td>
+		  <td><input type="checkbox" name="week1_23" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_23" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_23" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_23" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_23" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Check generator fuel level</td>
+		  <td>monthly</td>
+		  <td><input type="checkbox" name="week1_24" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_24" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_24" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_24" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_24" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Check conditions of grounds and building and report any security issues or maintenance/cleaning requirements</td>
+		  <td>each visit</td>
+		  <td><input type="checkbox" name="week1_25" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_25" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_25" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_25" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_25" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		<tr>
+		  <td>Check for and report pest activity</td>
+		  <td>each visit</td>
+		  <td style="border-bottom: 1px solid #ccc"><input type="checkbox" name="week1_26" value="yes">Week 1</td>
+		  <td><input type="checkbox" name="week2_26" value="yes" disabled="true">Week 2</td>
+		  <td><input type="checkbox" name="week3_26" value="yes" disabled="true">Week 3</td>
+		  <td><input type="checkbox" name="week4_26" value="yes" disabled="true">Week 4</td>
+		  <td><input type="checkbox" name="week5_26" value="yes" disabled="true">Week 5</td>
+		  <td></td>
+		</tr>
+		</table>
+		<br>
+		<div class="w3-cell-row" style="width:30%">
+			<div class="w3-container w3-light-grey w3-cell">
+				<h3>Contractors</h3>
+			</div>
+		</div>
+		<div class="w3-container w3-margin">
+			<div class="w3-container w3-cell">
+				<p>Contractors attended</p>
+				<textarea rows="4" cols="50" id="contractors" name="contractors"></textarea>
+				<div class="w3-container w3-cell w3-text-black">
+					<p id="pastcontractor">test</p>
+				</div>
+				<div class="w3-container w3-cell w3-text-black">
+					<p id="contractordate">test</p>
+				</div>
+			</div>
+			<div class="w3-container w3-cell">
+				<p>Issues</p>
+				<textarea rows="4" cols="50" id="issues" name="issues"></textarea>
+				<div class="w3-container w3-cell w3-text-black">
+					<p id="pastissues">test</p>
+				</div>
+				<div class="w3-container w3-cell w3-text-black">
+					<p id="issuedate">test</p>
+				</div>
+			</div>
+		</div>
+		<div class="w3-container w3-margin w3-text-orange">
+		<h2>Check all data and submit. You can only submit once a week.</h2>
+			<button id="submitBtn">Submit</button><br>
+			<div id="returnedMsg"></div><br>
+		</div>
+		<br>
+		</form>
+	</div>
+	<br>
+
+
+		
+	<div class="w3-card-4 w3-dark-grey" style="width:95%">
+		<h3>Contacts</h3>
+		<div class="w3-container" style="width:50%">
+		<table class="w3-table">
+		<tr>
+			<td>Gas delivery</td>
+			<td>Coastal Midwest transport</td>
+			<td style="border-top: 1px solid #ccc">08 9093 1222</td>
+		</tr>
+		<tr>
+			<td>Courier</td>
+			<td>Startrack Express</td>
+			<td>08 9021 3655</td>
+		</tr>
+		<tr>
+			<td>Hub Manager Perth</td>
+			<td>Michelle Mews</td>
+			<td>08 9263 2296<br>0408 305 728</td>
+		</tr>
+		<tr>
+			<td>Technical support</td>
+			<td>Belmont techs</td>
+			<td>08 9479 3933</td>
+		</tr>
+		<tr>
+			<td>Kalgoorlie Office phone</td>
+			<td>redirects to BOM after 3 rings</td>
+			<td style="border-bottom: 1px solid #ccc">08 9093 2500</td>
+		</tr>
+		</table>
+		<br>
+		</div>
+			
+	</div>
+	<br>
+
+		
+</div>
+</body>
+</html>
+
